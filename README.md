@@ -34,7 +34,7 @@ Tips
 ''''
 
     # set this file path to the output of the python script
-    filepath <- "~/extracted.p.values.11-June-2014.csv"
+    filepath <- "p_values.csv"
 
     # open up the data
     d <- read.csv(filepath)
@@ -43,7 +43,7 @@ Tips
     d <- d[which(d$num.dois==1),]
 
     # only keep papers where we have >0 results sections (reviews and commentaries often have 0 results sections)
-    d <- d[which(d$num.results.sections > 0),]
+    d <- d[which(d$num.results > 0),]
 
     # only keep papers with at least one author (some non-research papers legitimately have zero)
     d <- d[which(d$num.authors>0),]
