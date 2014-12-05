@@ -31,7 +31,6 @@ Tips
 * Be careful about the limitations of the script. It may not do what you want, or what you think it does. See particularly the known limitations, below.
 * The python script mines every single .nxml file in the PubMed OA dataset. This is not what most people want. Most people want p values from research articles only. It's hard to be 100% certain that you can just get research articles, but here are a few lines of R code which you can run **after running the data_cleaning.r script** that will clean things up a great deal (explanations in comments):
 
-''''
 
     # set this file path to the output of the python script
     filepath <- "~/extracted.p.values.11-June-2014.csv"
@@ -51,7 +50,6 @@ Tips
     # some journals publish large 'supplements' that contain conference many short conference abstracts (with results sections) in one file. Remove these
     d <- d[-c(grep("(Suppl)", d$file.name)),]
 
-''''
 
 p_value_extractor.py
 --------------------
