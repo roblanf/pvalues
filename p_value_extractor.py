@@ -34,10 +34,10 @@ from random import shuffle
 # Set these variables before you run the script:
 
 # input directory - all files in all subfolders will be searched
-input_file_path = ""
+input_file_path = "/Users/roblanfear/Documents/github/pvalues/testdata/"
 
 # output file path - your results will get written to this file
-output_file_path = "p_values.csv"
+output_file_path = "/Users/roblanfear/Documents/github/pvalues/results.csv"
 
 ###############################################################################
 
@@ -91,7 +91,7 @@ def tag_checker(tag, possible_titles, type=1):
     # # this is useful for diagnosing things to include in the possible titles...
     # # e.g. change 'results' to 'methods', or any other section you're looking for
     if title.count("results")>0 and type==2 and possible_titles[1]=="results":
-        #print title
+        print title
 
     # got to here, couldn't find the search words in the tag
 
@@ -116,41 +116,20 @@ def is_methods(tag, type=1):
     search_words = ['methods', 'materials and methods', "material and methods"]
     return(tag_checker(tag, search_words, type))
 
-def is_blind(text):
-    # A function to search for the word 'blind' in text
-    reg1 = re.compile(ur"\W[Bb]lind\W", re.UNICODE)
-    blind = len(reg1.findall(text))
+def is_discussion(tag, type=1):
+    search_words = ['discussion', 'results and discussion', 'discussion and results']
+    return(tag_checker(tag, search_words, type))
 
-    reg1 = re.compile(ur"\W[Nn]ot[\s]blind\W", re.UNICODE)
-    not_blind = len(reg1.findall(text))
+def is_intro(tag, type=1):
+    search_words = ['introduction', 'background']
+    return(tag_checker(tag, search_words, type))
 
-    reg1 = re.compile(ur"\W[Bb]linded\W", re.UNICODE)
-    blinded = len(reg1.findall(text))
 
-    reg1 = re.compile(ur"\W[Nn]ot[\s]blinded\W", re.UNICODE)
-    not_blinded = len(reg1.findall(text))
-
-    reg1 = re.compile(ur"\W[Bb]lindly\W", re.UNICODE)
-    blindly = len(reg1.findall(text))
-
-    reg1 = re.compile(ur"\W[Nn]ot[\s]blindly\W", re.UNICODE)
-    not_blindly = len(reg1.findall(text))
-
-    return(blind, not_blind, blinded, not_blinded, blindly, not_blindly)
-
-def has_experiment(text):
-    # A function to search for the words
-    # 'experiment', 'experimental', 'experimentally' in text
-    reg1 = re.compile(ur"\W[Ee]xperiment\W", re.UNICODE)
-    reg2 = re.compile(ur"\W[Ee]xperimental\W", re.UNICODE)
-    reg3 = re.compile(ur"\W[Ee]xperimentally\W", re.UNICODE)
-
-    matches = reg1.findall(text) + reg2.findall(text) + reg3.findall(text)
-    if len(matches)>0:
-        found = True
-    else:
-        found = False
-    return(found)
+def has_replication(text):
+    # A function to search for replicat* in text
+    rep = re.findall("[^.]*[Rr]eplica*[^.]*\.", text)
+    #rep = re.findall("[^.?!]*(?<=[.?\s!])[Rr]eplicat(?=[\s.?!])[^.?!]*[.?!]", text)
+    return(rep)
 
 
 def extract_p_values(text, label):
@@ -302,47 +281,34 @@ def clarify_soup(soup):
 
 
 def process_paper(file_path):
-    # put everything together to process a single nxml file
-    p_values = []
+
+    print(file_path)
 
     soup = BeautifulSoup(open(file_path), 'xml')
     soup = clarify_soup(soup)
-
-    # get p values from abstract
-    # p_values is a list of lists of [value, operator, label, section]
-    abstract, abstract_found = extract_abstract(soup)
-    if abstract_found==True:
-        p_values = p_values + extract_p_values(abstract, 'abstract')
-
     trash = [s.extract() for s in soup('abstract')]
 
-    # get p values from results
-    results, num_results, type_results = extract_section(soup, is_results)
-    if num_results > 0:
-        p_values = p_values + extract_p_values(results, 'results')
-
-    if len(p_values)==0:
-        p_values.append(["NA", "NA", "NA", "NA"]) # to record all papers at least once
-
-
-    # extract the text of the methods section
-    methods, num_methods, type_methods = extract_section(soup, is_methods)
-
-    blind, not_blind, blinded, not_blinded, blindly, not_blindly = is_blind(methods)
-    experiment_abstract = has_experiment(abstract)
+    intro, num_intro, type_intro = extract_section(soup, is_intro)
+    disc, num_disc, type_disc = extract_section(soup, is_discussion)
+    rep_intro = has_replication(intro)
+    rep_disc = has_replication(disc)
     doi = extract_first_doi(soup)
     journal = extract_journal(soup)
     num_authors = get_num_authors(soup)
     num_dois = get_num_dois(soup)
     year = get_year(soup)
 
-    row_end = [str(doi), str(num_dois), str(journal), str(abstract_found), str(experiment_abstract), str(blind), str(not_blind), str(blinded), str(not_blinded), str(blindly), str(not_blindly), str(num_methods), str(type_methods), str(num_results), str(type_results), str(num_authors), str(year)]
+    row_start = [str(doi), str(num_dois), str(journal), str(num_authors), str(year), str(type_intro), str(num_intro), str(type_disc), str(num_disc)]
 
     rows = []
 
     # now we make one row per p value (or just one row with 'NA's for p values if there were none)
-    for p in p_values:
-        row = [str(p[1])] + [p[0]] + [str(p[2])] + [str(p[3])] + row_end
+    for r in rep_intro:
+        row = row_start + ['intro'] + [''.join(['"',r,'"'])]
+        rows.append(row)
+
+    for r in rep_disc:
+        row = row_start + ['discussion'] + [''.join(['"',r,'"'])]
         rows.append(row)
 
     return(rows)
@@ -360,7 +326,7 @@ def get_all_papers(head_directory_path):
 
 
 # A hard-coded script to run the above functions.
-header = ["p.value", "operator", "decimal.places", "section", "first.doi", "num.dois", "journal.name", "abstract.found", "abstract.experiment", "methods.blind", "methods.not_blind", "methods.blinded", "methods.not_blinded", "methods.blindly", "methods.not_blindly", "num.methods", "type.methods", "num.results", "type.results", "num.authors", "year", "file.name", "folder.name"]
+header = ["first.doi", "num.dois", "journal.name", "num.authors", "year", "intro.type", "intro.num", "discussion.type", "discussion.num", "section", "sentence", "file.name", "folder.name"]
 
 outfile = open(output_file_path, 'w')
 header = ",".join(header)
@@ -379,8 +345,6 @@ for paper_path in get_all_papers(input_file_path):
     folder_name = os.path.basename(os.path.split(paper_path)[0])
     folder_name = "".join(['"', folder_name, '"'])
 
-    # 'result' is a list of lists, where each sub-list represents a p-value
-    # or a filler row which designates that no p-values were found
     for r in result:
         w = r + [paper_name] + [folder_name]
         w = ",".join(w)
