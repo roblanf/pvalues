@@ -30,14 +30,15 @@ import re
 from random import shuffle
 
 
+
 ###############################################################################
 # Set these variables before you run the script:
 
 # input directory - all files in all subfolders will be searched
-input_file_path = ""
+input_file_path = "/Users/roblanfear/Documents/github/pvalues/test_pprs"
 
 # output file path - your results will get written to this file
-output_file_path = "p_values.csv"
+output_file_path = "/Users/roblanfear/Documents/github/pvalues/test_output/p_values.csv"
 
 ###############################################################################
 
@@ -91,7 +92,7 @@ def tag_checker(tag, possible_titles, type=1):
     # # this is useful for diagnosing things to include in the possible titles...
     # # e.g. change 'results' to 'methods', or any other section you're looking for
     if title.count("results")>0 and type==2 and possible_titles[1]=="results":
-        #print title
+        print title
 
     # got to here, couldn't find the search words in the tag
 
@@ -157,9 +158,20 @@ def extract_p_values(text, label):
     # A function to extract p values from a string of text
     # [^a-zA-Z0-9*_] is any non-whitespace and non-symbol (*#†)
     # the [0]? matches zero or one '0', some p values are reported as "p < .001"
-    regex = re.compile(ur"[^a-zA-Z0-9*#†_][Pp][\s]*[=<>≤≥][\s]*[01]?[.][\d]+", re.UNICODE)
-    matches = regex.findall(text)
+    regex_p = re.compile(ur"[^a-zA-Z0-9*#†_][Pp][\s]*[=<>≤≥][\s]*[01]?[.][\d]+", re.UNICODE)
+    matches = regex_p.findall(text)
+
+    text_split = re.split(regex_p, text)
+
+    # get 100 chars of context either side of the match
+    contexts = []
+    for i, p in enumerate(matches):
+        prior = text_split[i][-100:]
+        post = text_split[i+1][:100]
+        contexts.append(''.join([prior, p, post]))
+
     pvals = []
+    sentences = []
     # strip the first character, then the 'p' or 'P'
     for i, match in enumerate(matches):
         match = "".join(match.split()) # remove all whitespace
@@ -174,8 +186,9 @@ def extract_p_values(text, label):
         if val <= 1.0:
           pval = [operator, val, decimal_places, label]
           pvals.append(pval)
+          sentences.append(contexts[i])
 
-    return(pvals)
+    return(pvals, sentences)
 
 def extract_first_doi(soup):
     # This could be a lot more efficient, but it works
@@ -304,6 +317,7 @@ def clarify_soup(soup):
 def process_paper(file_path):
     # put everything together to process a single nxml file
     p_values = []
+    sentences = []
 
     soup = BeautifulSoup(open(file_path), 'xml')
     soup = clarify_soup(soup)
@@ -312,18 +326,22 @@ def process_paper(file_path):
     # p_values is a list of lists of [value, operator, label, section]
     abstract, abstract_found = extract_abstract(soup)
     if abstract_found==True:
-        p_values = p_values + extract_p_values(abstract, 'abstract')
+        new_p_values, new_sentences = extract_p_values(abstract, 'abstract') 
+        p_values = p_values + new_p_values 
+        sentences = sentences + new_sentences 
 
     trash = [s.extract() for s in soup('abstract')]
 
     # get p values from results
     results, num_results, type_results = extract_section(soup, is_results)
     if num_results > 0:
-        p_values = p_values + extract_p_values(results, 'results')
+        new_p_values, new_sentences = extract_p_values(results, 'results') 
+        p_values = p_values + new_p_values 
+        sentences = sentences + new_sentences 
 
     if len(p_values)==0:
         p_values.append(["NA", "NA", "NA", "NA"]) # to record all papers at least once
-
+        sentences = ["NA"]
 
     # extract the text of the methods section
     methods, num_methods, type_methods = extract_section(soup, is_methods)
@@ -341,8 +359,8 @@ def process_paper(file_path):
     rows = []
 
     # now we make one row per p value (or just one row with 'NA's for p values if there were none)
-    for p in p_values:
-        row = [str(p[1])] + [p[0]] + [str(p[2])] + [str(p[3])] + row_end
+    for i, p in enumerate(p_values):
+        row = [str(p[1])] + [p[0]] + [str(p[2])] + [str(p[3])] + row_end + [''.join(['"', sentences[i], '"'])]
         rows.append(row)
 
     return(rows)
@@ -350,17 +368,18 @@ def process_paper(file_path):
 
 def get_all_papers(head_directory_path):
     # a function to walk through files recursively and yield *.nxml files
+    all_papers = [] # remove to make generator
     for root, dirs, files in os.walk(head_directory_path):
-        shuffle(dirs) # useful for development - so you don't always optimse for journals starting with 'A'
-        dirs.sort(reverse=True) # useful for development - so you don't always optimse for journals starting with 'A'
+        #shuffle(dirs) # useful for development - so you don't always optimse for journals starting with 'A'
+        #dirs.sort(reverse=True) # useful for development - so you don't always optimse for journals starting with 'A'
         for curfile in files:
             if curfile.endswith(".nxml"):
-                yield join(root, curfile)
-
-
+                #yield join(root, curfile) # use for generator
+                all_papers.append(join(root, curfile)) # use for list
+    return(all_papers)
 
 # A hard-coded script to run the above functions.
-header = ["p.value", "operator", "decimal.places", "section", "first.doi", "num.dois", "journal.name", "abstract.found", "abstract.experiment", "methods.blind", "methods.not_blind", "methods.blinded", "methods.not_blinded", "methods.blindly", "methods.not_blindly", "num.methods", "type.methods", "num.results", "type.results", "num.authors", "year", "file.name", "folder.name"]
+header = ["p.value", "operator", "decimal.places", "section", "first.doi", "num.dois", "journal.name", "abstract.found", "abstract.experiment", "methods.blind", "methods.not_blind", "methods.blinded", "methods.not_blinded", "methods.blindly", "methods.not_blindly", "num.methods", "type.methods", "num.results", "type.results", "num.authors", "year", "sentence", "file.name", "folder.name"]
 
 outfile = open(output_file_path, 'w')
 header = ",".join(header)
@@ -369,8 +388,9 @@ outfile.write(header)
 outfile.write("\n")
 
 paper_num = 1
+all_papers = get_all_papers(input_file_path)
 
-for paper_path in get_all_papers(input_file_path):
+for paper_path in all_papers:
 
     result = process_paper(paper_path)
     paper_name = os.path.basename(paper_path)
@@ -388,8 +408,8 @@ for paper_path in get_all_papers(input_file_path):
         w = "".join([w, "\n"])
         outfile.write(w.encode('utf-8'))
 
-    if paper_num % 100 == 0:
-        print "done", paper_num, "papers"
+    if paper_num % 10 == 0:
+        print "done", paper_num, "papers out of ", len(all_papers)
     paper_num = paper_num + 1
 
 outfile.close()
